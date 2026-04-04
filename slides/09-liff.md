@@ -2,29 +2,56 @@
 marp: true
 theme: default
 paginate: true
+footer: '**LINE Developer Tools** · Chapter 9: LIFF'
 style: |
-  section {
-    font-family: 'Sarabun', 'Noto Sans Thai', sans-serif;
-  }
-  h1 { color: #06C755; }
-  h2 { color: #06C755; }
-  table { font-size: 0.7em; }
-  code { font-size: 0.75em; }
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600;700&display=swap');
+  :root { --line-green: #06C755; --line-dark: #1a1a2e; --accent: #00B900; }
+  section { font-family: 'Noto Sans Thai', 'Sarabun', sans-serif; background-color: #fff; color: #2d2d2d; }
+  section::after { font-size: 0.6em; color: #999; }
+  h1 { color: var(--line-green); font-weight: 700; border-bottom: 3px solid var(--line-green); padding-bottom: 0.2em; }
+  h2 { color: var(--line-green); font-weight: 600; }
+  h3 { color: #444; }
+  table { font-size: 0.78em; border-collapse: separate; border-spacing: 0; width: 100%; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.08); }
+  th { background: linear-gradient(135deg, var(--line-green), var(--accent)); color: white; font-weight: 600; padding: 10px 14px; text-align: left; }
+  td { padding: 8px 14px; border-bottom: 1px solid #eee; }
+  tr:nth-child(even) td { background-color: #f7fdf8; }
+  tr:last-child td { border-bottom: none; }
+  code { font-size: 0.82em; background-color: #e8f5e9; color: #2e7d32; padding: 2px 8px; border-radius: 4px; }
+  pre { background: var(--line-dark); border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  pre code { background: transparent; color: #e0e0e0; padding: 0; font-size: 0.78em; }
+  blockquote { border-left: 4px solid var(--line-green); background: linear-gradient(90deg, #f0faf2, transparent); padding: 12px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.88em; }
+  a { color: var(--line-green); text-decoration: none; font-weight: 600; }
+  footer { font-size: 0.55em !important; color: #bbb !important; }
+  section.cover { background: linear-gradient(135deg, #06C755 0%, #00B900 40%, #008C00 100%); color: white; text-align: center; display: flex; flex-direction: column; justify-content: center; }
+  section.cover h1 { color: white; border: none; font-size: 2.8em; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  section.cover h2 { color: rgba(255,255,255,0.9); font-weight: 400; font-size: 1.3em; }
+  section.cover footer { color: rgba(255,255,255,0.6) !important; }
+  section.cover::after { color: rgba(255,255,255,0.5); }
+  section.divider { background: linear-gradient(135deg, var(--line-dark), #16213e); color: white; display: flex; flex-direction: column; justify-content: center; }
+  section.divider h1 { color: var(--line-green); border: none; font-size: 2.4em; }
+  section.divider h2 { color: rgba(255,255,255,0.7); font-weight: 300; }
+  section.divider footer { color: rgba(255,255,255,0.3) !important; }
+  section.divider::after { color: rgba(255,255,255,0.3); }
 ---
 
+<!-- _class: cover -->
+<!-- _paginate: false -->
+<!-- _footer: '' -->
+
 # LINE Developer Tools
-## Chapter 9: LIFF (LINE Front-end Framework)
+
+## Chapter 9 · LIFF (LINE Front-end Framework)
 
 ---
 
 # LIFF คืออะไร?
 
-**LINE Front-end Framework (LIFF)** - เปิด Web App ภายในแอป LINE
+**LINE Front-end Framework (LIFF)** — เปิด Web App ภายในแอป LINE
 
 **ทำอะไรได้:**
 - เข้าถึงข้อมูลผู้ใช้ (userId, email, displayName, pictureUrl)
 - ส่งข้อความแทนผู้ใช้
-- แชร์ข้อความไปยังเพื่อน/กลุ่ม
+- แชร์ข้อความไปยังเพื่อน / กลุ่ม
 - สแกน QR Code
 - รองรับ External Browser ด้วย LINE Login
 
@@ -33,7 +60,7 @@ style: |
 # LIFF Sizes
 
 | Size | พื้นที่หน้าจอ | ใช้เมื่อ |
-|---|---|---|
+|---|:---:|---|
 | **Compact** | 50% | แสดงข้อมูลสั้นๆ |
 | **Tall** | 75% | ฟอร์ม, ข้อมูลปานกลาง |
 | **Full** | 100% | เว็บแอปเต็มรูปแบบ |
@@ -64,7 +91,7 @@ npm run dev
 
 ---
 
-# LIFF - liff.init()
+# LIFF — liff.init()
 
 ต้องเรียก `liff.init()` ก่อนใช้ฟังก์ชันอื่น
 
@@ -83,11 +110,19 @@ liff.init({ liffId: '1234567890-abcdefgh' })
   });
 ```
 
-> `liff.ready` - Promise ที่ resolve เมื่อ init สำเร็จ
+> `liff.ready` — Promise ที่ resolve เมื่อ init สำเร็จ
 
 ---
 
-# LIFF - Get Profile
+<!-- _class: divider -->
+
+# LIFF APIs
+
+## ฟังก์ชันหลักของ LIFF SDK
+
+---
+
+# LIFF — Get Profile
 
 ```javascript
 // รอ LIFF พร้อม
@@ -111,7 +146,7 @@ const email = liff.getDecodedIDToken().email;
 
 ---
 
-# LIFF - Environment & Context
+# LIFF — Environment & Context
 
 ```javascript
 // ข้อมูลสภาพแวดล้อม
@@ -130,7 +165,7 @@ context.groupId;        // ถ้าเปิดในกลุ่ม
 
 ---
 
-# LIFF - Check Friendship
+# LIFF — Check Friendship
 
 ตรวจสอบว่าผู้ใช้เป็นเพื่อนกับ LINE OA หรือยัง
 
@@ -145,12 +180,11 @@ if (friendship.friendFlag) {
 }
 ```
 
-**ต้องการ:**
-- LINE OA ต้อง link กับ LINE Login channel เดียวกัน
+> **ต้องการ:** LINE OA ต้อง link กับ LINE Login channel เดียวกัน
 
 ---
 
-# LIFF - Send Messages
+# LIFF — Send Messages
 
 ```javascript
 // ส่งข้อความไปยังแชทปัจจุบัน (ต้องเปิดในแอป LINE)
@@ -161,17 +195,17 @@ await liff.sendMessages([
 ```
 
 ```javascript
-// แชร์ข้อความ - เลือกผู้รับได้ (ใช้ได้ทั้งในและนอก LINE)
+// แชร์ข้อความ — เลือกผู้รับได้ (ใช้ได้ทั้งในและนอก LINE)
 await liff.shareTargetPicker([
   { type: "text", text: "แชร์ข้อความนี้" }
 ]);
 ```
 
-**รองรับ:** Text, Sticker, Image, Video, Audio, Location, Template, Flex
+> รองรับ: Text, Sticker, Image, Video, Audio, Location, Template, Flex
 
 ---
 
-# LIFF - Scan QR Code
+# LIFF — Scan QR Code
 
 ```javascript
 // สแกน QR Code (LIFF SDK v2.15.0+, Full screen เท่านั้น)
@@ -207,11 +241,8 @@ liff-cli app create \
   --endpoint-url "https://example.com" \
   --view-type full
 
-# ดูรายการ LIFF Apps
+# ดูรายการ / อัปเดต / ลบ
 liff-cli app list
-
-# อัปเดต / ลบ
 liff-cli app update --liff-id {id} --endpoint-url "..."
 liff-cli app delete --liff-id {id}
 ```
-

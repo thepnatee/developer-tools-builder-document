@@ -2,24 +2,51 @@
 marp: true
 theme: default
 paginate: true
+footer: '**LINE Developer Tools** · Chapter 5: Messages & API'
 style: |
-  section {
-    font-family: 'Sarabun', 'Noto Sans Thai', sans-serif;
-  }
-  h1 { color: #06C755; }
-  h2 { color: #06C755; }
-  table { font-size: 0.7em; }
-  code { font-size: 0.75em; }
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600;700&display=swap');
+  :root { --line-green: #06C755; --line-dark: #1a1a2e; --accent: #00B900; }
+  section { font-family: 'Noto Sans Thai', 'Sarabun', sans-serif; background-color: #fff; color: #2d2d2d; }
+  section::after { font-size: 0.6em; color: #999; }
+  h1 { color: var(--line-green); font-weight: 700; border-bottom: 3px solid var(--line-green); padding-bottom: 0.2em; }
+  h2 { color: var(--line-green); font-weight: 600; }
+  h3 { color: #444; }
+  table { font-size: 0.78em; border-collapse: separate; border-spacing: 0; width: 100%; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.08); }
+  th { background: linear-gradient(135deg, var(--line-green), var(--accent)); color: white; font-weight: 600; padding: 10px 14px; text-align: left; }
+  td { padding: 8px 14px; border-bottom: 1px solid #eee; }
+  tr:nth-child(even) td { background-color: #f7fdf8; }
+  tr:last-child td { border-bottom: none; }
+  code { font-size: 0.82em; background-color: #e8f5e9; color: #2e7d32; padding: 2px 8px; border-radius: 4px; }
+  pre { background: var(--line-dark); border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  pre code { background: transparent; color: #e0e0e0; padding: 0; font-size: 0.78em; }
+  blockquote { border-left: 4px solid var(--line-green); background: linear-gradient(90deg, #f0faf2, transparent); padding: 12px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.88em; }
+  a { color: var(--line-green); text-decoration: none; font-weight: 600; }
+  footer { font-size: 0.55em !important; color: #bbb !important; }
+  section.cover { background: linear-gradient(135deg, #06C755 0%, #00B900 40%, #008C00 100%); color: white; text-align: center; display: flex; flex-direction: column; justify-content: center; }
+  section.cover h1 { color: white; border: none; font-size: 2.8em; text-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  section.cover h2 { color: rgba(255,255,255,0.9); font-weight: 400; font-size: 1.3em; }
+  section.cover footer { color: rgba(255,255,255,0.6) !important; }
+  section.cover::after { color: rgba(255,255,255,0.5); }
+  section.divider { background: linear-gradient(135deg, var(--line-dark), #16213e); color: white; display: flex; flex-direction: column; justify-content: center; }
+  section.divider h1 { color: var(--line-green); border: none; font-size: 2.4em; }
+  section.divider h2 { color: rgba(255,255,255,0.7); font-weight: 300; }
+  section.divider footer { color: rgba(255,255,255,0.3) !important; }
+  section.divider::after { color: rgba(255,255,255,0.3); }
 ---
 
+<!-- _class: cover -->
+<!-- _paginate: false -->
+<!-- _footer: '' -->
+
 # LINE Developer Tools
-## Chapter 5: Messages & API
+
+## Chapter 5 · Messages & API
 
 ---
 
 # API Domain
 
-| Domain | Endpoint |
+| Domain | ใช้สำหรับ |
 |---|---|
 | `api.line.me` | ส่งข้อความ, จัดการ Rich Menu, อื่นๆ |
 | `api-data.line.me` | Get content, Upload rich menu image |
@@ -30,7 +57,7 @@ POST https://api.line.me/v2/bot/message/push
 POST https://api.line.me/v2/bot/message/multicast
 POST https://api.line.me/v2/bot/message/broadcast
 
-GET https://api-data.line.me/v2/bot/message/{messageId}/content
+GET  https://api-data.line.me/v2/bot/message/{messageId}/content
 ```
 
 ---
@@ -39,19 +66,20 @@ GET https://api-data.line.me/v2/bot/message/{messageId}/content
 
 | Endpoint | Rate Limit |
 |---|---|
-| Send push message | 2,000 req/sec |
-| Send multicast message | 200 req/sec |
-| Send broadcast message | 60 req/hour |
-| Send narrowcast message | 60 req/hour |
-| Display loading animation | 100 req/sec |
-| Create rich menu | 100 req/hour |
-| Other API endpoints | 2,000 req/sec |
+| **Send reply message** | 2,000 req/sec |
+| **Send push message** | 2,000 req/sec |
+| **Send multicast message** | 200 req/sec |
+| **Send broadcast message** | 60 req/hour |
+| **Send narrowcast message** | 60 req/hour |
+| **Display loading animation** | 100 req/sec |
+| **Create rich menu** | 100 req/hour |
+| **Other API endpoints** | 2,000 req/sec |
 
 > เกินขีดจำกัด = ได้รับ `429 Too Many Requests`
 
 ---
 
-# Message Types - Text & Sticker
+# Message Types — Text & Sticker
 
 ```json
 // Text message
@@ -79,7 +107,7 @@ GET https://api-data.line.me/v2/bot/message/{messageId}/content
 
 ---
 
-# Message Types - Image, Video, Audio, Location
+# Message Types — Image, Video, Audio, Location
 
 ```json
 // Image
@@ -105,7 +133,7 @@ GET https://api-data.line.me/v2/bot/message/{messageId}/content
 
 ---
 
-# Text Message v2 - Mention & Emoji
+# Text Message v2 — Mention & Emoji
 
 ```json
 {
@@ -128,7 +156,7 @@ GET https://api-data.line.me/v2/bot/message/{messageId}/content
 }
 ```
 
-> Text v2 แทนที่ `{key}` ด้วย mention/emoji ได้โดยตรง
+> Text v2 แทนที่ `{key}` ด้วย mention / emoji ได้โดยตรง
 
 ---
 
@@ -137,7 +165,7 @@ GET https://api-data.line.me/v2/bot/message/{messageId}/content
 | Template | คำอธิบาย |
 |---|---|
 | **Buttons** | รูปภาพ + หัวข้อ + ข้อความ + ปุ่ม action |
-| **Confirm** | ข้อความ + ปุ่ม 2 ปุ่ม (Yes/No) |
+| **Confirm** | ข้อความ + ปุ่ม 2 ปุ่ม (Yes / No) |
 | **Carousel** | หลายคอลัมน์เลื่อนดูได้ |
 | **Image Carousel** | หลายรูปภาพเลื่อนดูได้ |
 
@@ -145,7 +173,7 @@ GET https://api-data.line.me/v2/bot/message/{messageId}/content
 
 ---
 
-# Buttons Template ตัวอย่าง
+# Buttons Template — ตัวอย่าง
 
 ```json
 {
@@ -168,27 +196,35 @@ GET https://api-data.line.me/v2/bot/message/{messageId}/content
 
 ---
 
+<!-- _class: divider -->
+
 # Sending Messages
 
-## Reply (ฟรี)
+## วิธีการส่งข้อความผ่าน API
+
+---
+
+# Sending Messages
+
+### Reply (ฟรี)
 ```bash
 POST https://api.line.me/v2/bot/message/reply
 # ใช้ replyToken จาก webhook, สูงสุด 5 bubbles
 ```
 
-## Push (หักโควต้า)
+### Push (หักโควต้า)
 ```bash
 POST https://api.line.me/v2/bot/message/push
 # ส่งหาผู้ใช้คนเดียว
 ```
 
-## Multicast (หักโควต้า)
+### Multicast (หักโควต้า)
 ```bash
 POST https://api.line.me/v2/bot/message/multicast
 # ส่งหาหลายคนพร้อมกัน (สูงสุด 500 คน)
 ```
 
-## Broadcast (หักโควต้า)
+### Broadcast (หักโควต้า)
 ```bash
 POST https://api.line.me/v2/bot/message/broadcast
 # ส่งหาผู้ติดตามทั้งหมด
@@ -198,12 +234,9 @@ POST https://api.line.me/v2/bot/message/broadcast
 
 # Quick Reply
 
-ปุ่มแสดงด้านล่างแชทให้ผู้ใช้แตะตอบกลับทันที (สูงสุด 13 ปุ่ม)
+ปุ่มแสดงด้านล่างแชทให้ผู้ใช้แตะตอบกลับทันที (สูงสุด **13** ปุ่ม)
 
-**Actions ที่ใช้ได้:**
-- Camera / Camera Roll / Location
-- Postback / Message / URI
-- Datetime picker / Clipboard
+**Actions ที่ใช้ได้:** Camera · Camera Roll · Location · Postback · Message · URI · Datetime picker · Clipboard
 
 ```json
 {
@@ -233,7 +266,7 @@ POST https://api.line.me/v2/bot/message/broadcast
 
 **ได้มาจาก:**
 1. Webhook Event (Text, Sticker, Image, Video)
-2. Response ของการส่งข้อความ (Reply/Push)
+2. Response ของการส่งข้อความ (Reply / Push)
 
 ```json
 {
@@ -245,14 +278,14 @@ POST https://api.line.me/v2/bot/message/broadcast
 
 ---
 
-# Channel Access Token - ประเภท
+# Channel Access Token — ประเภท
 
-| ประเภท | อายุ | จำนวน/Channel | ข้อดี |
+| ประเภท | อายุ | จำนวน / Channel | ข้อดี |
 |---|---|---|---|
-| Long-lived | ไม่หมดอายุ | 1 | ง่าย |
-| Short-lived | 30 วัน | 30 | ปลอดภัยปานกลาง |
-| v2.1 | สูงสุด 30 วัน | 30 | ปลอดภัยสูงสุด (JWT) |
-| Stateless | 15 นาที | ไม่จำกัด | Per-request |
+| **Long-lived** | ไม่หมดอายุ | 1 | ง่าย |
+| **Short-lived** | 30 วัน | 30 | ปลอดภัยปานกลาง |
+| **v2.1** | สูงสุด 30 วัน | 30 | ปลอดภัยสูงสุด (JWT) |
+| **Stateless** | 15 นาที | ไม่จำกัด | Per-request |
 
 > **แนะนำ:** ใช้ v2.1 หรือ Stateless
 > **สำคัญ:** Revoke Token ที่สงสัยว่ารั่วไหลทันที!
@@ -274,7 +307,7 @@ Authorization: Bearer {channel access token}
 - ใช้ได้เฉพาะแชท 1 ต่อ 1
 - แสดงเฉพาะเมื่อผู้ใช้เปิดหน้าแชทอยู่
 - หายไปเมื่อบอทส่งข้อความใหม่
-- `loadingSeconds`: 5-60 วินาที (ค่าเริ่มต้น 20)
+- `loadingSeconds`: 5–60 วินาที (ค่าเริ่มต้น 20)
 - **ฟรี** ไม่มีค่าใช้จ่าย
 
 ---
@@ -344,7 +377,15 @@ GET https://api.line.me/v2/bot/message/progress/narrowcast
 
 ---
 
-# Cron Job - ส่งข้อความอัตโนมัติ
+<!-- _class: divider -->
+
+# Advanced Features
+
+## Cron Job · LINE Beacon · Redis
+
+---
+
+# Cron Job — ส่งข้อความอัตโนมัติ
 
 ![bg right:30% w:350](../assets/ch05-messages/cronjob.png)
 
@@ -365,10 +406,13 @@ GET https://api.line.me/v2/bot/message/progress/narrowcast
 เทคโนโลยีส่งข้อความเมื่อผู้ใช้เข้าใกล้อุปกรณ์ Beacon
 
 **Webhook Event Types:**
-- `enter` - เข้าสู่พื้นที่ Beacon
-- `leave` - ออกจากพื้นที่ Beacon  
-- `stay` - อยู่ในพื้นที่ Beacon (ต้องขอสิทธิ์พิเศษ)
-- `banner` - กดแบนเนอร์
+
+| Event | คำอธิบาย |
+|---|---|
+| `enter` | เข้าสู่พื้นที่ Beacon |
+| `leave` | ออกจากพื้นที่ Beacon |
+| `stay` | อยู่ในพื้นที่ Beacon (ต้องขอสิทธิ์พิเศษ) |
+| `banner` | กดแบนเนอร์ |
 
 > ต้องลงทะเบียน Beacon ใน LINE Official Account Manager
 
@@ -391,4 +435,3 @@ await redis.del("user:123");
 ```
 
 > รองรับ: strings, hashes, lists, sets, sorted sets, streams
-
