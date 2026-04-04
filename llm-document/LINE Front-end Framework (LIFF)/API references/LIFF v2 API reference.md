@@ -3197,7 +3197,7 @@ liff
 To use the `liff.createShortcutOnHomeScreen()` method, all of the following conditions must be met:
 
 - It's a LINE MINI App.
-- The LIFF SDK version of the LINI MINI App is v2.23.0 or later.
+- The LIFF SDK version of the LINE MINI App is v2.23.0 or later.
 - The LINE app version on the user's device is 13.20.0 or later.
 
 #### Operating conditions 
