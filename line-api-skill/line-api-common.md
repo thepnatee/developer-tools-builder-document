@@ -245,3 +245,172 @@ GET https://api.line.me/v2/bot/profile/{userId}
 8. **Webhook 200**: Always return 200 quickly, process events async. LINE retries if you're slow
 9. **api-data.line.me**: Use this domain for content/image endpoints, not api.line.me
 10. **Audience concurrent limit**: Max 10 concurrent operations per audienceGroupId
+
+---
+
+## Production Recipes
+
+### Recipe 1: Exponential Backoff for 429 Rate Limit
+
+```typescript
+import axios, { AxiosError } from 'axios'
+
+async function callLineAPI<T>(
+  fn: () => Promise<T>,
+  maxRetries = 5
+): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      const e = err as AxiosError
+      if (e.response?.status !== 429) throw err  // only retry on 429
+      if (attempt === maxRetries - 1) throw err
+
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s — with jitter
+      const delay = Math.min(1000 * 2 ** attempt, 16000) + Math.random() * 1000
+      console.warn(`429 hit, retrying in ${delay}ms (attempt ${attempt + 1})`)
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+  throw new Error('unreachable')
+}
+
+// Usage
+const result = await callLineAPI(() =>
+  axios.post('https://api.line.me/v2/bot/message/push', payload, { headers })
+)
+```
+
+### Recipe 2: Channel Access Token v2.1 Rotation (JWT)
+
+For tokens with up to 30-day expiration. Issue a new one every 29 days.
+
+```typescript
+import jwt from 'jsonwebtoken'
+import axios from 'axios'
+
+async function issueChannelAccessToken(
+  channelId: string,
+  privateKeyJwk: object,  // JWK with use: "sig"
+  kid: string             // assertion key ID
+): Promise<{ access_token: string; expires_in: number; key_id: string }> {
+  const now = Math.floor(Date.now() / 1000)
+
+  // Sign JWT assertion
+  const assertion = jwt.sign(
+    {
+      iss: channelId,
+      sub: channelId,
+      aud: 'https://api.line.me/',
+      exp: now + 30 * 60,  // 30 min max
+      token_exp: 60 * 60 * 24 * 30  // 30 days validity
+    },
+    privateKeyJwk,
+    { algorithm: 'RS256', keyid: kid, header: { alg: 'RS256', typ: 'JWT', kid } }
+  )
+
+  const { data } = await axios.post(
+    'https://api.line.me/oauth2/v2.1/token',
+    new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+      client_assertion: assertion
+    }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  )
+
+  return data  // { access_token, token_type, expires_in, key_id }
+}
+```
+
+Pair with cron-job.org: schedule a cron to call this every 29 days and store token in Secret Manager / Firestore.
+
+### Recipe 3: Universal LINE Error Handler
+
+Maps status codes to actionable outcomes.
+
+```typescript
+type LineErrorAction = 'retry' | 'ignore' | 'alert' | 'invalidate-token'
+
+function classifyLineError(status: number): LineErrorAction {
+  if (status === 429) return 'retry'          // rate limited — backoff
+  if (status === 401) return 'invalidate-token' // token expired/revoked
+  if (status === 404) return 'ignore'         // user blocked / not found
+  if (status >= 500) return 'retry'           // server error — backoff
+  if (status === 409) return 'ignore'         // duplicate retry key
+  return 'alert'                              // 400/403/413 — bug in your code
+}
+
+async function safePushMessage(userId: string, messages: unknown[]) {
+  try {
+    await callLineAPI(() =>
+      axios.post(
+        'https://api.line.me/v2/bot/message/push',
+        { to: userId, messages },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+    )
+  } catch (err: any) {
+    const action = classifyLineError(err.response?.status ?? 500)
+    const requestId = err.response?.headers['x-line-request-id']
+    console.error(`LINE API error [${action}] requestId=${requestId}`, err.response?.data)
+
+    if (action === 'invalidate-token') await rotateToken()
+    if (action === 'alert') await notifyDev(err)
+    // 'ignore' and 'retry' are handled by callLineAPI / fire-and-forget
+  }
+}
+```
+
+### Recipe 4: 404 Profile — Graceful Degradation
+
+```typescript
+async function getUserProfileSafe(userId: string) {
+  try {
+    const { data } = await axios.get(
+      `https://api.line.me/v2/bot/profile/${userId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    return data
+  } catch (err: any) {
+    if (err.response?.status === 404) {
+      // User blocked, not a friend, or never consented
+      return { userId, displayName: 'ผู้ใช้', pictureUrl: null, statusMessage: null }
+    }
+    throw err
+  }
+}
+```
+
+---
+
+## Flow Diagrams
+
+### Token Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Issued: POST /oauth2/v2.1/token
+    Issued --> InUse: cache in Secret Manager
+    InUse --> InUse: reuse for requests
+    InUse --> NearExpiry: day 29 of 30
+    NearExpiry --> Rotated: cron job issues new token
+    Rotated --> InUse
+    InUse --> Revoked: compromise detected
+    Revoked --> Issued: issue fresh token
+```
+
+### 429 Retry Flow
+
+```mermaid
+flowchart TD
+    Call[Call LINE API] --> Resp{Status?}
+    Resp -->|200| Done[Success]
+    Resp -->|429| Wait[Wait backoff + jitter]
+    Wait --> Attempt{Attempt<br/>≥ 5?}
+    Attempt -->|No| Call
+    Attempt -->|Yes| Fail[Give up + alert]
+    Resp -->|4xx| Classify[classifyLineError]
+    Classify --> Action[retry / ignore / alert / invalidate-token]
+

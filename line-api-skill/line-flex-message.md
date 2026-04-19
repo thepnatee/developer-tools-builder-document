@@ -498,3 +498,113 @@ Units: keywords, pixels, or percentages
 - `flex` property: integer 0-3, controls proportional width in horizontal boxes
 - Rendering varies by device OS, LINE version, screen resolution, language, font
 - Filler component is **deprecated** — use component properties instead
+
+---
+
+## Architecture Diagram
+
+```mermaid
+flowchart TD
+    Root[Flex Message<br/>altText + contents] --> Container
+    Container --> Bubble[Bubble<br/>single card]
+    Container --> Carousel[Carousel<br/>max 12 bubbles]
+    Bubble --> Block
+    Carousel --> Bubble
+    Block --> Header[header<br/>optional]
+    Block --> Hero[hero<br/>optional]
+    Block --> Body[body<br/>usually required]
+    Block --> Footer[footer<br/>optional]
+    Header --> Component
+    Hero --> Component
+    Body --> Component
+    Footer --> Component
+    Component --> Box[Box<br/>layout container]
+    Component --> Button[Button]
+    Component --> Image[Image]
+    Component --> Text[Text + Span]
+    Component --> Icon[Icon]
+    Component --> Separator[Separator]
+    Component --> Video[Video]
+    Box --> Component
+```
+
+---
+
+## Modify-A-Recipe Playbook
+
+Students often want to tweak an existing recipe. Follow this order:
+
+```mermaid
+flowchart TD
+    Start[Start with nearest recipe] --> Q1{What's<br/>different?}
+    Q1 -->|Colors/text only| Swap[Swap text and color hex values — no structure change]
+    Q1 -->|Add/remove 1 row| AddBox[Duplicate a horizontal box inside body.contents]
+    Q1 -->|Change layout direction| Layout[Change layout: vertical/horizontal in the Box]
+    Q1 -->|Make it clickable| Action[Add action to Box, Button, or Image]
+    Q1 -->|New image overlay| Overlay[Use position:absolute<br/>with offsetTop/offsetStart]
+    Q1 -->|Different shape| Resize[Change bubble size<br/>kilo/mega/giga/deca/hecto]
+```
+
+**Golden rules when modifying:**
+1. Always keep `altText` — it's required
+2. Image URLs must be HTTPS (no HTTP, no local)
+3. If `flex: 0` on all horizontal children → justifyContent works
+4. If text overflows → add `wrap: true` and `maxLines`
+5. Validate with `/v2/bot/message/{type}/validate` before sending
+
+---
+
+## Layout Debug Checklist
+
+When Flex renders wrong:
+
+| Symptom | Likely Fix |
+|---------|-----------|
+| Text cut off | Add `wrap: true`, increase `maxLines` or remove it |
+| Elements overlap unexpectedly | Check if `position: "absolute"` was set and offset values |
+| Columns uneven widths | Set `flex: 1, 2, 3...` on children to control ratio |
+| Buttons look tiny | Set `height: "sm"` or `"md"` on Button |
+| Image stretched | Change `aspectMode: "fit"` instead of `"cover"` |
+| Icons not inline with text | Place them in a `baseline` layout Box |
+| Whole card looks cramped | Add `spacing: "md"` on parent Box or `margin` on child |
+| Footer buttons too close | Add `spacing: "sm"` on footer Box |
+| Gradient not showing | Check that `background` is inside a Box, not on Image |
+| Rendering differs Android vs iOS | Check LINE version; some properties need 11.22.0+ |
+
+---
+
+## Responsive Design Pattern
+
+Use `scaling: true` (LINE 13.6.0+) so text respects user's font size setting:
+
+```json
+{
+  "type": "text",
+  "text": "Accessible text",
+  "size": "md",
+  "scaling": true
+}
+```
+
+For truly responsive bubbles, combine:
+- `size: "giga"` (wider on big screens, max width device-dependent)
+- `maxWidth: "100%"` on hero images
+- `aspectMode: "cover"` with a conservative `aspectRatio` like `"20:13"`
+- Use percentages instead of pixels for offsets when possible
+
+---
+
+## Validation Before Sending
+
+```typescript
+async function validateFlexMessage(flexMessage: any) {
+  const { data } = await axios.post(
+    'https://api.line.me/v2/bot/message/validate/flex',
+    flexMessage,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  return data  // { } on success, or { message, details } on error
+}
+```
+
+Gotcha: the validate endpoint catches structural bugs but **not** runtime issues like bad image URLs or 50KB overflow after emoji expansion. Always test in real device after validation passes.

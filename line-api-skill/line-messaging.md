@@ -576,3 +576,183 @@ interface WebhookResponse {
 3. Execute action (use reply token if available — it's free)
 4. If no match → use default response (if configured)
 5. If no default → return 200 OK with no reply
+
+---
+
+## Decision Tree: Which Sending Method?
+
+```mermaid
+flowchart TD
+    Start[Need to send a message] --> Q1{Do you have<br/>a reply token?}
+    Q1 -->|Yes, < 1 min old| Reply[Reply — FREE, preferred]
+    Q1 -->|No or expired| Q2{How many<br/>recipients?}
+    Q2 -->|1 user| Push[Push]
+    Q2 -->|2-500 users| Multicast[Multicast]
+    Q2 -->|All followers| Q3{Need<br/>targeting?}
+    Q3 -->|No| Broadcast[Broadcast]
+    Q3 -->|Yes, by demographic /<br/>tag / audience| Narrowcast[Narrowcast]
+    Q2 -->|> 500 users| Q4{Is it<br/>all followers?}
+    Q4 -->|Yes| Broadcast
+    Q4 -->|No, specific segment| Narrowcast
+    Q4 -->|No, specific IDs| Chunk[Chunk into<br/>multicasts of 500]
+```
+
+**Quick rule of thumb:**
+- Reply is FREE — always use it if you have a valid reply token
+- Multicast is cheaper in API calls than N pushes (1 call instead of N)
+- Broadcast/Narrowcast has low rate limit (60 req/hour) — queue and retry
+
+---
+
+## Production Recipes
+
+### Recipe 1: Multicast Chunker (Handle >500 Users)
+
+```typescript
+async function multicastChunked(userIds: string[], messages: any[]) {
+  const CHUNK_SIZE = 500
+  const chunks: string[][] = []
+  for (let i = 0; i < userIds.length; i += CHUNK_SIZE) {
+    chunks.push(userIds.slice(i, i + CHUNK_SIZE))
+  }
+
+  const results = await Promise.allSettled(
+    chunks.map(chunk =>
+      axios.post(
+        'https://api.line.me/v2/bot/message/multicast',
+        { to: chunk, messages },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+    )
+  )
+
+  const failed = results
+    .map((r, i) => r.status === 'rejected' ? { chunk: i, reason: r.reason } : null)
+    .filter(Boolean)
+  if (failed.length) console.error('Failed chunks:', failed)
+  return { total: userIds.length, chunks: chunks.length, failed: failed.length }
+}
+```
+
+### Recipe 2: Reply-with-Push-Fallback Pattern
+
+When reply token may have expired (e.g., after long processing).
+
+```typescript
+async function sendReplyOrPush(
+  replyToken: string | null,
+  userId: string,
+  messages: any[],
+  receivedAt?: number
+) {
+  // Use reply if token is fresh (< 55s old)
+  if (replyToken && receivedAt && Date.now() - receivedAt < 55_000) {
+    try {
+      await axios.post(
+        'https://api.line.me/v2/bot/message/reply',
+        { replyToken, messages },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      return { method: 'reply', cost: 0 }
+    } catch (err: any) {
+      if (err.response?.data?.message !== 'Invalid reply token') throw err
+      // fall through to push
+    }
+  }
+
+  // Fallback to push (costs quota)
+  await axios.post(
+    'https://api.line.me/v2/bot/message/push',
+    { to: userId, messages },
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  return { method: 'push', cost: 1 }
+}
+```
+
+### Recipe 3: Quota-Aware Broadcast Scheduler
+
+Check remaining quota before sending large broadcasts.
+
+```typescript
+async function checkQuotaBeforeSend() {
+  const [quotaRes, consumedRes] = await Promise.all([
+    axios.get('https://api.line.me/v2/bot/message/quota', {
+      headers: { Authorization: `Bearer ${token}` }
+    }),
+    axios.get('https://api.line.me/v2/bot/message/quota/consumption', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  ])
+
+  const limit = quotaRes.data.value   // 0 = unlimited (Premium), else monthly cap
+  const used  = consumedRes.data.totalUsage
+  const remaining = limit === 0 ? Infinity : limit - used
+
+  console.log(`Quota: ${used}/${limit === 0 ? 'unlimited' : limit}`)
+  return { limit, used, remaining }
+}
+
+async function safeBroadcast(messages: any[], estimatedRecipients: number) {
+  const { remaining } = await checkQuotaBeforeSend()
+  if (remaining < estimatedRecipients) {
+    throw new Error(`Insufficient quota: need ${estimatedRecipients}, have ${remaining}`)
+  }
+  await axios.post(
+    'https://api.line.me/v2/bot/message/broadcast',
+    { messages },
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+}
+```
+
+### Recipe 4: Loading Animation Wrapper for Long Processing
+
+Show typing indicator while your bot thinks/calls external API.
+
+```typescript
+async function withLoadingAnimation<T>(
+  userId: string,
+  seconds: 5 | 10 | 15 | 20 | 25 | 30 | 35 | 40 | 45 | 50 | 55 | 60,
+  work: () => Promise<T>
+): Promise<T> {
+  // Fire-and-forget the animation (don't block work)
+  axios.post(
+    'https://api.line.me/v2/bot/chat/loading/start',
+    { chatId: userId, loadingSeconds: seconds },
+    { headers: { Authorization: `Bearer ${token}` } }
+  ).catch(err => console.warn('Loading animation failed:', err.message))
+
+  return work()  // Animation stops when you actually send a reply/push
+}
+
+// Usage
+const answer = await withLoadingAnimation(userId, 15, async () => {
+  return await callOpenAI(userQuestion)
+})
+await pushMessage(userId, [{ type: 'text', text: answer }])
+```
+
+---
+
+## Sending Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant LINE
+    participant Bot
+    participant Quota
+
+    User->>LINE: Send message
+    LINE->>Bot: webhook event (replyToken)
+    Note over Bot: start loading animation<br/>(fire-and-forget)
+    Bot->>Bot: Process / call LLM
+    Bot->>Quota: check remaining (optional)
+    alt Reply token still valid
+        Bot->>LINE: POST /message/reply (FREE)
+    else Token expired
+        Bot->>LINE: POST /message/push (costs quota)
+    end
+    LINE->>User: Deliver message
+```

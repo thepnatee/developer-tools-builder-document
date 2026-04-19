@@ -296,3 +296,172 @@ POST https://api.line.me/v2/bot/richmenu/bulk/link
 | GET | `/v2/bot/richmenu/alias/{richMenuAliasId}` | Get alias info |
 | DELETE | `/v2/bot/richmenu/alias/{richMenuAliasId}` | Delete alias |
 | GET | `/v2/bot/richmenu/alias/list` | List all aliases |
+
+---
+
+## Decision Tree: Manager or API?
+
+```mermaid
+flowchart TD
+    Start[Create Rich Menu] --> Q1{Need<br/>postback or<br/>datetimepicker?}
+    Q1 -->|Yes| API[Use Messaging API]
+    Q1 -->|No| Q2{Need<br/>tab switching?}
+    Q2 -->|Yes| API
+    Q2 -->|No| Q3{Need<br/>per-user menu?}
+    Q3 -->|Yes| API
+    Q3 -->|No| Q4{Need<br/>statistics or<br/>schedule?}
+    Q4 -->|Yes| Mgr[Use OA Manager]
+    Q4 -->|No| Mgr
+```
+
+**Rule of thumb:** If your menu is static and you don't need dynamic actions → use OA Manager (faster, includes stats). Otherwise → API.
+
+---
+
+## Tab Switching State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> MenuA: set default to alias-a
+    MenuA --> MenuB: tap tab → richmenuswitch(alias-b)
+    MenuB --> MenuA: tap tab → richmenuswitch(alias-a)
+    MenuA --> MenuC: tap tab → richmenuswitch(alias-c)
+    MenuC --> MenuA
+    note right of MenuA: alias-a → richmenu-id-A<br/>alias swaps without<br/>changing user's menu binding
+```
+
+Why aliases matter: if you set user's menu to a raw `richMenuId`, switching requires calling the API for every user. With aliases, you just update the alias → richMenuId mapping, and all users instantly see the new menu.
+
+---
+
+## Production Recipes
+
+### Recipe 1: Full Rich Menu Setup Script (with tab switching)
+
+```typescript
+import axios from 'axios'
+import fs from 'fs/promises'
+
+const LINE = axios.create({
+  baseURL: 'https://api.line.me',
+  headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` }
+})
+const LINE_DATA = axios.create({
+  baseURL: 'https://api-data.line.me',
+  headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` }
+})
+
+async function createMenuWithImage(menuSpec: any, imagePath: string) {
+  const { data } = await LINE.post('/v2/bot/richmenu', menuSpec)
+  const richMenuId = data.richMenuId
+
+  const image = await fs.readFile(imagePath)
+  const mime = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg'
+  await LINE_DATA.post(
+    `/v2/bot/richmenu/${richMenuId}/content`,
+    image,
+    { headers: { 'Content-Type': mime } }
+  )
+
+  return richMenuId
+}
+
+async function upsertAlias(aliasId: string, richMenuId: string) {
+  try {
+    await LINE.post('/v2/bot/richmenu/alias', { richMenuAliasId: aliasId, richMenuId })
+  } catch (err: any) {
+    if (err.response?.status === 400) {
+      // alias already exists — update it
+      await LINE.post(`/v2/bot/richmenu/alias/${aliasId}`, { richMenuId })
+    } else {
+      throw err
+    }
+  }
+}
+
+async function setupTabSwitchingMenus() {
+  const menuAId = await createMenuWithImage(menuASpec, './menu-a.png')
+  const menuBId = await createMenuWithImage(menuBSpec, './menu-b.png')
+
+  await upsertAlias('richmenu-alias-a', menuAId)
+  await upsertAlias('richmenu-alias-b', menuBId)
+
+  // Set Menu A as default
+  await LINE.post(`/v2/bot/user/all/richmenu/${menuAId}`)
+  console.log('Done. Menu A is default, tab switches to Menu B.')
+}
+```
+
+### Recipe 2: Area Overlap Validator
+
+Rich Menu areas MUST NOT overlap. LINE validates on create, but catches it early:
+
+```typescript
+interface Area { bounds: { x: number; y: number; width: number; height: number } }
+
+function detectOverlaps(areas: Area[]): string[] {
+  const issues: string[] = []
+  for (let i = 0; i < areas.length; i++) {
+    for (let j = i + 1; j < areas.length; j++) {
+      const a = areas[i].bounds, b = areas[j].bounds
+      const overlaps =
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+      if (overlaps) issues.push(`Area ${i} overlaps Area ${j}`)
+    }
+  }
+  return issues
+}
+```
+
+### Recipe 3: Staged Per-User Rollout
+
+Roll out a new menu to 10% of users first, then 100%.
+
+```typescript
+async function stagedRollout(newRichMenuId: string, userIds: string[], percent: number) {
+  const sampleSize = Math.ceil(userIds.length * percent / 100)
+  const sample = userIds.slice().sort(() => Math.random() - 0.5).slice(0, sampleSize)
+
+  // Batch link supports up to 500 userIds per call
+  const CHUNK = 500
+  for (let i = 0; i < sample.length; i += CHUNK) {
+    await LINE.post('/v2/bot/richmenu/bulk/link', {
+      richMenuId: newRichMenuId,
+      userIds: sample.slice(i, i + CHUNK)
+    })
+  }
+  console.log(`Rolled out to ${sample.length}/${userIds.length} users (${percent}%)`)
+}
+```
+
+### Recipe 4: Rollback — Replace All Per-User Menus
+
+If a deployed menu has a bug, fast rollback:
+
+```typescript
+async function rollbackAllPerUserMenus(safeRichMenuId: string) {
+  // Step 1: reset default menu
+  await LINE.post(`/v2/bot/user/all/richmenu/${safeRichMenuId}`)
+
+  // Step 2: clear all per-user links by overwriting the alias
+  await upsertAlias('richmenu-alias-a', safeRichMenuId)
+
+  // Step 3: delete broken menu so no one can get relinked accidentally
+  // await LINE.delete(`/v2/bot/richmenu/${brokenId}`)
+}
+```
+
+---
+
+## Gotchas
+
+- **Areas can't overlap** — use `detectOverlaps()` before POST
+- **Image must be ≤ 1MB** — compress with mozjpeg or pngquant if bigger
+- **PC/Web users don't see rich menu** — always have text fallback
+- **Default menu takes up to 1 minute** to show after change (user must reopen chat)
+- **Per-user menu is immediate** but requires user to be a friend
+- **Max 1000 rich menus per channel** — delete unused ones
+- **Alias name collision**: API returns 400 if alias exists; use `upsertAlias()` pattern above

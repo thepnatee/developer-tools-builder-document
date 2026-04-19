@@ -427,3 +427,217 @@ POST https://api.line.me/v2/bot/channel/webhook/test
 5. **Reply token is single-use** — can't reply twice to the same event.
 6. **Always verify signatures** — never trust unverified webhook requests.
 7. **Handle all event types** — return 200 even for events you don't process.
+
+---
+
+## Webhook Lifecycle Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant LINE as LINE Platform
+    participant Bot as Your Webhook
+    participant Queue as Async Queue/DB
+
+    User->>LINE: Send message
+    LINE->>Bot: POST /webhook (x-line-signature)
+    Bot->>Bot: Verify signature (raw body + HMAC-SHA256)
+    alt Signature invalid
+        Bot-->>LINE: 401 Unauthorized
+    else Signature valid
+        Bot-->>LINE: 200 OK (immediately)
+        Bot->>Queue: Enqueue event
+        Queue->>Bot: Process async
+        alt Event already processed
+            Bot->>Bot: Skip (idempotent)
+        else New event
+            Bot->>LINE: Reply/Push message
+        end
+    end
+
+    Note over LINE,Bot: If bot slow or non-2xx,<br/>LINE retries with isRedelivery=true
+```
+
+---
+
+## Production Recipes
+
+### Recipe 1: Full Production-Ready Webhook (Firebase Cloud Function)
+
+Copy-paste baseline with signature verify, immediate 200, async processing, and Firestore idempotency.
+
+```typescript
+import { onRequest } from 'firebase-functions/v2/https'
+import { defineSecret } from 'firebase-functions/params'
+import { getFirestore } from 'firebase-admin/firestore'
+import { initializeApp } from 'firebase-admin/app'
+import crypto from 'crypto'
+
+initializeApp()
+const channelSecret = defineSecret('LINE_CHANNEL_SECRET')
+const channelAccessToken = defineSecret('LINE_CHANNEL_ACCESS_TOKEN')
+
+export const webhook = onRequest(
+  { secrets: [channelSecret, channelAccessToken] },
+  async (req, res) => {
+    // 1) Verify signature
+    const signature = req.header('x-line-signature') ?? ''
+    const rawBody = req.rawBody.toString('utf8')  // Firebase provides rawBody
+    const expected = crypto
+      .createHmac('SHA256', channelSecret.value())
+      .update(rawBody, 'utf8')
+      .digest('base64')
+
+    if (expected !== signature) {
+      console.error('Invalid signature')
+      res.status(401).send('Invalid signature')
+      return
+    }
+
+    // 2) Return 200 immediately
+    res.status(200).send('OK')
+
+    // 3) Process events async
+    const events = req.body.events ?? []
+    await Promise.allSettled(events.map(handleEvent))
+  }
+)
+
+async function handleEvent(event: any) {
+  const db = getFirestore()
+
+  // Idempotency guard via Firestore transaction
+  const ref = db.collection('processed_events').doc(event.webhookEventId)
+  const shouldProcess = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref)
+    if (snap.exists) return false  // already processed
+    tx.set(ref, { processedAt: Date.now(), type: event.type })
+    return true
+  })
+
+  if (!shouldProcess) {
+    console.log(`Skipping duplicate: ${event.webhookEventId}`)
+    return
+  }
+
+  try {
+    switch (event.type) {
+      case 'message': return await handleMessage(event)
+      case 'follow':  return await handleFollow(event)
+      case 'postback': return await handlePostback(event)
+      default:        return  // ignore others — still returned 200
+    }
+  } catch (err) {
+    // Roll back idempotency marker so redelivery can retry
+    await ref.delete()
+    throw err
+  }
+}
+```
+
+### Recipe 2: Signature Verification Debug Checklist
+
+When signature fails, run through this in order:
+
+```typescript
+function debugSignature(rawBody: string, header: string, secret: string) {
+  console.log('--- Signature Debug ---')
+  console.log('Secret length:', secret.length, '(should be 32 chars)')
+  console.log('Header value:', header)
+  console.log('Raw body length:', rawBody.length)
+  console.log('Raw body first 100:', rawBody.slice(0, 100))
+  console.log('Raw body is string?', typeof rawBody === 'string')
+
+  const expected = crypto
+    .createHmac('SHA256', secret)
+    .update(rawBody, 'utf8')
+    .digest('base64')
+  console.log('Expected:', expected)
+  console.log('Match?', expected === header)
+
+  // Common fixes:
+  // - Using req.body (parsed) instead of rawBody
+  // - Framework silently re-serialized the body
+  // - Body has BOM or trimmed whitespace
+  // - Wrong channel (dev vs prod secret mismatch)
+}
+```
+
+### Recipe 3: Reply Token Safety Wrapper
+
+Reply tokens expire in 1 minute and single-use. Don't let slow code waste them.
+
+```typescript
+async function safeReply(
+  replyToken: string,
+  messages: any[],
+  receivedAt: number
+) {
+  const age = Date.now() - receivedAt
+  if (age > 55_000) {
+    console.warn(`Reply token too old (${age}ms), falling back to push`)
+    return pushMessageFallback(messages)
+  }
+
+  try {
+    await axios.post(
+      'https://api.line.me/v2/bot/message/reply',
+      { replyToken, messages },
+      { headers: { Authorization: `Bearer ${token}` }, timeout: 5000 }
+    )
+  } catch (err: any) {
+    if (err.response?.data?.message === 'Invalid reply token') {
+      return pushMessageFallback(messages)
+    }
+    throw err
+  }
+}
+```
+
+### Recipe 4: Content Download (Images/Video from User)
+
+```typescript
+async function downloadMessageContent(messageId: string): Promise<Buffer> {
+  // First, check transcoding status for video/audio
+  const statusRes = await axios.get(
+    `https://api-data.line.me/v2/bot/message/${messageId}/content/transcoding`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  ).catch(() => ({ data: { status: 'succeeded' } }))  // images don't need transcoding
+
+  if (statusRes.data.status !== 'succeeded') {
+    throw new Error('Content still transcoding — retry later')
+  }
+
+  // Fetch the actual content
+  const { data } = await axios.get(
+    `https://api-data.line.me/v2/bot/message/${messageId}/content`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      responseType: 'arraybuffer'
+    }
+  )
+  return Buffer.from(data)
+}
+```
+
+---
+
+## Event Type Decision Tree
+
+```mermaid
+flowchart TD
+    Event[Webhook Event] --> T{event.type}
+    T -->|message| M{message.type}
+    M -->|text| TextHandler[Parse command /<br/>intent]
+    M -->|image/video/audio/file| MediaHandler[Download via<br/>api-data.line.me]
+    M -->|location| LocHandler[Use lat/lng]
+    M -->|sticker| StickerHandler[Usually just react]
+    T -->|postback| P[Parse postback.data<br/>URLSearchParams]
+    T -->|follow| F[Welcome flow /<br/>save userId]
+    T -->|unfollow| U[Mark user inactive<br/>no reply token!]
+    T -->|join/leave| G[Group lifecycle]
+    T -->|beacon| B[Location-based<br/>trigger]
+    T -->|accountLink| A[Verify nonce<br/>link accounts]
+    T -->|videoPlayComplete| V[Track<br/>trackingId]
+    T -->|unsend| US[Delete cached<br/>message]
+```

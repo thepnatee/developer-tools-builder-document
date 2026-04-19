@@ -316,3 +316,232 @@ Use permanent links instead of constructing LIFF URLs manually — they handle e
 5. **LIFF URL must be HTTPS** — no HTTP allowed
 6. **LIFF in external browser**: login redirects user to LINE login page, then back to LIFF
 7. **Access token expires** — don't store long-term; re-init LIFF to get fresh token
+
+---
+
+## LIFF Init Pipeline Diagram
+
+```mermaid
+sequenceDiagram
+    participant Browser as User Browser<br/>(LINE app or external)
+    participant LIFF as LIFF SDK
+    participant LINEAuth as LINE Login
+    participant App as Your LIFF page
+
+    Browser->>LIFF: liff.init({ liffId })
+    LIFF->>LIFF: bootstrap SDK
+    alt Already logged in
+        LIFF-->>App: init resolved
+    else Not logged in
+        App->>LIFF: liff.login()
+        LIFF->>LINEAuth: redirect to authorize
+        LINEAuth-->>Browser: user approves scope
+        LINEAuth->>Browser: redirect back with code
+        Browser->>LIFF: liff.init() again
+        LIFF-->>App: now logged in
+    end
+    App->>LIFF: liff.getProfile()
+    LIFF-->>App: {userId, displayName, ...}
+    App->>LIFF: liff.getAccessToken()
+    LIFF-->>App: token (for backend auth)
+```
+
+---
+
+## Decision Tree: Which LIFF Send Method?
+
+```mermaid
+flowchart TD
+    Start[Need to send message from LIFF] --> Q1{Is LIFF<br/>in LINE app?}
+    Q1 -->|Yes| Q2{Send to<br/>current chat?}
+    Q1 -->|No, external browser| Picker[shareTargetPicker —<br/>user picks recipients]
+    Q2 -->|Yes| Send[sendMessages —<br/>posts as user]
+    Q2 -->|Send to others| Picker
+    Send --> Note1[Note: user sees their<br/>own message in chat]
+    Picker --> Note2[Note: opens picker<br/>user can cancel]
+```
+
+---
+
+## Production Recipes
+
+### Recipe 1: Full Init Pipeline with Error Fallbacks
+
+```typescript
+import liff from '@line/liff'
+
+type LiffState =
+  | { status: 'ready'; profile: Profile; accessToken: string; isInClient: boolean }
+  | { status: 'needs-login' }
+  | { status: 'unsupported'; reason: string }
+  | { status: 'error'; error: Error }
+
+export async function bootstrapLiff(liffId: string): Promise<LiffState> {
+  try {
+    await liff.init({ liffId })
+  } catch (err: any) {
+    if (err.code === 'INIT_FAILED') return { status: 'unsupported', reason: err.message }
+    return { status: 'error', error: err }
+  }
+
+  if (!liff.isLoggedIn()) return { status: 'needs-login' }
+
+  try {
+    const profile = await liff.getProfile()
+    const accessToken = liff.getAccessToken()
+    if (!accessToken) return { status: 'error', error: new Error('No access token') }
+    return {
+      status: 'ready',
+      profile,
+      accessToken,
+      isInClient: liff.isInClient()
+    }
+  } catch (err: any) {
+    // Scope missing or user revoked
+    if (err.code === 'FORBIDDEN') {
+      liff.logout()
+      return { status: 'needs-login' }
+    }
+    return { status: 'error', error: err }
+  }
+}
+```
+
+### Recipe 2: Complete LIFF → Firebase Auth Flow (Production)
+
+See existing "LIFF → Firebase Auth Flow" section above — add this server-side verification hardening:
+
+```typescript
+// Backend — production hardening
+export const verifyLiffToken = onCall(async (request) => {
+  const { liffToken } = request.data
+  if (!liffToken) throw new HttpsError('invalid-argument', 'missing liffToken')
+
+  // 1) Verify token validity AND scope with LINE
+  const verify = await fetch(
+    `https://api.line.me/oauth2/v2.1/verify?access_token=${liffToken}`
+  ).then(r => r.json())
+
+  if (verify.error) throw new HttpsError('unauthenticated', verify.error_description)
+  // verify = { scope, client_id, expires_in }
+  const requiredChannelId = process.env.LINE_LOGIN_CHANNEL_ID
+  if (verify.client_id !== requiredChannelId) {
+    throw new HttpsError('permission-denied', 'wrong channel')
+  }
+  if (verify.expires_in <= 0) {
+    throw new HttpsError('unauthenticated', 'token expired')
+  }
+
+  // 2) Fetch profile with verified token
+  const profileRes = await fetch('https://api.line.me/v2/profile', {
+    headers: { Authorization: `Bearer ${liffToken}` }
+  })
+  if (!profileRes.ok) throw new HttpsError('unauthenticated', 'profile fetch failed')
+  const profile = await profileRes.json()
+
+  // 3) Upsert in Firestore + issue Firebase custom token
+  // ...see main recipe above
+})
+```
+
+### Recipe 3: LIFF ↔ Bot Communication via Signed Payload
+
+When LIFF triggers server work and the bot should push result, use a signed payload to prevent replay:
+
+```typescript
+// LIFF frontend
+const accessToken = liff.getAccessToken()
+await fetch('/api/submit-form', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ formData })
+})
+liff.closeWindow()
+```
+
+```typescript
+// Backend
+app.post('/api/submit-form', async (req, res) => {
+  // Verify LIFF token
+  const token = req.headers.authorization?.slice(7)
+  const verify = await fetch(`https://api.line.me/oauth2/v2.1/verify?access_token=${token}`)
+    .then(r => r.json())
+  if (verify.error) return res.status(401).send('invalid token')
+
+  const profile = await fetch('https://api.line.me/v2/profile', {
+    headers: { Authorization: `Bearer ${token}` }
+  }).then(r => r.json())
+
+  // Process form, then push result via bot
+  await processForm(req.body.formData)
+  await pushMessage(profile.userId, [
+    { type: 'text', text: `ส่งฟอร์มสำเร็จ ขอบคุณ ${profile.displayName}` }
+  ])
+
+  res.json({ ok: true })
+})
+```
+
+### Recipe 4: Query Param Router (LIFF as Multi-screen App)
+
+Use query params to pass context from Flex/Rich Menu to LIFF.
+
+```typescript
+// Flex/Rich Menu URI action
+{ type: 'uri', uri: `https://liff.line.me/${LIFF_ID}?view=order&id=123` }
+
+// In LIFF
+const params = new URLSearchParams(window.location.search)
+const view = params.get('view')  // 'order'
+const id = params.get('id')      // '123'
+
+switch (view) {
+  case 'order':   showOrderDetails(id); break
+  case 'profile': showProfile(); break
+  case 'form':    showForm(id); break
+  default:        showHome()
+}
+```
+
+### Recipe 5: Scope Error Fallback UI
+
+When user declines scope, show friendly retry.
+
+```tsx
+// React example
+function LiffGate({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<LiffState | null>(null)
+
+  useEffect(() => { bootstrapLiff(LIFF_ID).then(setState) }, [])
+
+  if (!state) return <Loading />
+  if (state.status === 'needs-login')
+    return <button onClick={() => liff.login()}>เข้าสู่ระบบด้วย LINE</button>
+  if (state.status === 'unsupported')
+    return <p>กรุณาเปิดหน้านี้ในแอป LINE — {state.reason}</p>
+  if (state.status === 'error')
+    return <p>เกิดข้อผิดพลาด ลองใหม่อีกครั้ง</p>
+
+  return <LiffContext.Provider value={state}>{children}</LiffContext.Provider>
+}
+```
+
+---
+
+## LIFF API Availability Matrix
+
+| API | In-Client (iOS/Android) | External Browser | LINE PC |
+|-----|------------------------|------------------|---------|
+| `liff.init()` | Yes | Yes | Yes |
+| `liff.login()` | N/A (auto) | Yes | Yes |
+| `liff.getProfile()` | Yes | Yes | Yes |
+| `liff.sendMessages()` | Yes | **No** | No |
+| `liff.shareTargetPicker()` | Yes | Yes | No |
+| `liff.scanCodeV2()` | Yes | No | No |
+| `liff.closeWindow()` | Yes | No | No |
+| `liff.openWindow()` | Yes | Yes | Yes |
+
+Always check `liff.isApiAvailable()` before calling platform-specific APIs.
