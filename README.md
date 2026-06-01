@@ -7,19 +7,6 @@
 
 ---
 
-## เริ่มต้นยังไง?
-
-```mermaid
-flowchart LR
-    A[01-02<br/>เข้าใจภาพรวม] --> B[03-04<br/>สร้าง Bot ตัวแรก]
-    B --> C[05<br/>ส่งข้อความ +<br/>Advanced]
-    C --> D[06<br/>Flex Messages]
-    D --> E[08<br/>Rich Menu]
-    E --> F[09<br/>LIFF<br/>Web in LINE]
-    F --> G[10<br/>MINI App]
-    G --> H[11<br/>Build Tools]
-```
-
 **แนะนำลำดับ**
 - **มือใหม่** — อ่านตามลำดับ Chapter 01 → 11
 - **ทำ Bot อยู่แล้ว อยากต่อยอด** — ข้ามไป Chapter 05 (advanced messaging) → 09 (LIFF)
@@ -34,9 +21,7 @@ developer-tools-builder-document/
 ├── workshop/         ← 47 บทสอน (.md) — เอกสารหลัก
 ├── line-api-skill/   ← Cookbook ของขวัญนักเรียน — เอาไปใช้กับ Claude/AI ได้เลย
 ├── docs/             ← Reference docs จาก LINE Developers (ทางการ)
-├── slides/marp/      ← Slide สำเร็จรูปจาก workshop (PDF/PPTX)
 ├── assets/           ← รูปภาพประกอบ
-└── slides/           ← Slide deck เก่าที่สร้างจาก pptxgenjs (legacy)
 ```
 
 ---
@@ -153,35 +138,6 @@ developer-tools-builder-document/
 | [`line-liff.md`](line-api-skill/line-liff.md) | LIFF init pipeline + Firebase auth + 5 production recipes |
 
 **วิธีใช้** copy โฟลเดอร์ `line-api-skill/` ไปไว้ที่ `~/.claude/skills/` แล้วใช้ Claude Code ในโปรเจ็กต์ — Claude จะรู้ pattern ครบ และ generate code ที่มี error handling เลย
-
----
-
-## สร้าง Slides จากเนื้อหา
-
-```bash
-cd slides/marp
-node generate.js          # สร้าง slide .md จาก workshop ทุกบท
-./build.sh pdf            # render PDF ทั้งหมด
-./build.sh pptx           # หรือ PowerPoint
-./build.sh watch 05-13    # live preview ใน browser
-```
-
-ดูคู่มือเต็มที่ [slides/marp/README.md](slides/marp/README.md)
-
----
-
-## Tech Stack ที่ครอบคลุม
-
-| Stack | ใช้ในบทไหน |
-|-------|-----------|
-| **LINE Messaging API** | Ch 03, 05, 08 — webhook, messages, rich menu |
-| **LINE Front-end Framework (LIFF)** | Ch 09 — Web app ภายใน LINE |
-| **LINE MINI App** | Ch 10 — Native-like app ภายใน LINE |
-| **Firebase Functions / Storage** | Ch 04, 07 — backend hosting + media |
-| **Node.js / TypeScript** | ทุกบท — backend runtime |
-| **Vue.js 3** | Ch 09 — LIFF frontend |
-| **Marp** | slides/marp — slide generation |
-| **Mermaid** | ทั้งคอร์ส — diagrams ในเอกสาร & slides |
 
 ---
 

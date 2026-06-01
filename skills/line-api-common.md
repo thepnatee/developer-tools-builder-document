@@ -233,6 +233,99 @@ GET https://api.line.me/v2/bot/profile/{userId}
 
 ---
 
+## Channel Access Token Rotation Strategy
+
+### Token Types Comparison
+
+```
+Long-Lived          Short-Lived v2.1       Stateless
+(Indefinite)        (User-Specified)       (15 min per request)
+├─ Easy to use      ├─ Reuse within        ├─ No storage needed
+├─ Security risk    │  validity period      ├─ Highest security
+├─ 1 per channel    ├─ 30 tokens max        ├─ Unlimited issuance
+└─ Default choice   ├─ Recommended for      ├─ Higher CPU cost
+                    │  production           └─ Stateless/distributed
+                    └─ Rotate every N days  systems only
+```
+
+### Production Token Rotation Pattern (v2.1 Recommended)
+
+Store token + expiry in an in-memory cache or persistent store (env var, file, or any DB):
+
+```typescript
+interface CachedToken {
+  accessToken: string;
+  expiresAt: Date;
+}
+
+let tokenCache: CachedToken | null = null;
+
+async function getValidToken(): Promise<string> {
+  if (tokenCache && tokenCache.expiresAt > new Date(Date.now() + 60 * 60 * 1000)) {
+    return tokenCache.accessToken;  // reuse if not expiring within 1 hour
+  }
+  const newToken = await issueShortLivedToken();
+  tokenCache = {
+    accessToken: newToken.access_token,
+    expiresAt: new Date(Date.now() + newToken.expires_in * 1000)
+  };
+  return tokenCache.accessToken;
+}
+
+async function issueShortLivedToken() {
+  const res = await fetch('https://api.line.me/oauth2/v2.1/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: process.env.LINE_CHANNEL_ID!,
+      client_secret: process.env.LINE_CHANNEL_SECRET!
+    })
+  });
+  if (!res.ok) throw new Error(`Token issue failed: ${res.status}`);
+  return res.json();  // { access_token, expires_in, token_type }
+}
+
+// Usage
+const token = await getValidToken();
+const res = await fetch('https://api.line.me/v2/bot/profile/U123', {
+  headers: { Authorization: `Bearer ${token}` }
+});
+```
+
+### Rotation Strategies
+
+**Strategy 1: Check-on-Use (Lazy Rotation)**
+- Check expiry every time you use the token
+- Rotate only when approaching expiry
+- ✅ Simplest, works for most bots
+- ❌ First call after expiry might fail
+
+**Strategy 2: Scheduled Rotation (Proactive)**
+- Run Cloud Scheduler every 25 days to rotate
+- Always fresh token available
+- ✅ No first-call failures
+- ❌ Extra Cloud Function invocation cost
+
+**Strategy 3: Stateless Tokens (Per-Request)**
+- Issue stateless token for each API call (15-min validity)
+- ✅ Highest security, no storage
+- ❌ Higher CPU cost, can hit rate limit (370 req/sec)
+
+**Recommendation:** Strategy 1 (check-on-use) for small-to-medium bots, Strategy 2 for high-traffic production.
+
+### Token Revocation (Emergency)
+
+If token compromised:
+
+```bash
+curl -X POST https://api.line.me/v2/oauth/revoke \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d "access_token={token_to_revoke}&client_id={channelId}&client_secret={channelSecret}"
+```
+
+---
+
 ## Gotchas & Common Mistakes
 
 1. **Signature verification**: Must use raw body string BEFORE parsing. Most bugs come from verifying after `JSON.parse()`
