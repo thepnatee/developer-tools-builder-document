@@ -1,0 +1,12 @@
+{
+  "name": "line-api-skill",
+  "skills": [
+    "./skills/line-api-skill",
+    "./skills/line-api-common",
+    "./skills/line-api-expert",
+    "./skills/line-messaging",
+    "./skills/line-webhook",
+    "./skills/line-flex-message",
+    "./skills/line-rich-menu"
+  ]
+}

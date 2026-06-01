@@ -6,24 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This workspace is the **Cloudea LINE Developer Workshop** — a Thai-language workshop series by Thepnatee Phojan (LINE API Expert). It has two sub-repositories:
 
-- `developer-tools-builder-document/` — 47 workshop chapters, AI cookbook skills, and official LINE docs mirror
+- `developer-tools-builder-document/` — 45 workshop chapters, AI cookbook skills, and official LINE docs mirror
 - `line-developers-docs-source/` — Official LINE Developers documentation source files (read-only reference, mirrored from LINE)
 
 ## Directory Structure
 
 ```
 developer-tools-builder-document/
-├── workshop/          # 47 lesson files (01-01 → 11-02), Thai language
-├── line-api-skill/    # AI/Claude cookbook — production-ready LINE API recipes
-│   ├── SKILL.md       # Index + decision guide for choosing sub-skill
-│   ├── line-api-common.md
-│   ├── line-messaging.md
-│   ├── line-webhook.md
-│   ├── line-flex-message.md
-│   ├── line-rich-menu.md
-│   ├── line-liff.md
-│   ├── line-mini-app.md
-│   └── line-login.md
+├── workshop/          # 45 lesson files (01-01 → 11-02), Thai language
+├── skills/            # AI/Claude cookbook — production-ready LINE API recipes (9arm-skills format)
+│   ├── line-api-skill/SKILL.md   # Index + decision guide for choosing sub-skill
+│   ├── line-api-common/SKILL.md
+│   ├── line-api-expert/SKILL.md
+│   ├── line-messaging/SKILL.md
+│   ├── line-webhook/SKILL.md
+│   ├── line-flex-message/SKILL.md
+│   └── line-rich-menu/SKILL.md
+├── .claude-plugin/plugin.json    # Skill registry for npx skills
 ├── docs/              # Official LINE Developers docs (mirrored from line-developers-docs-source)
 │   ├── messaging-api/
 │   ├── liff/
@@ -46,11 +45,20 @@ Every file in `workshop/` follows this fixed structure:
 
 Maintain this structure when adding or editing workshop files.
 
-## Using line-api-skill as an AI Cookbook
+## Using skills/ as an AI Cookbook
 
-`line-api-skill/` is designed to be used with Claude/AI to generate production-ready LINE API code. Load only the 1–2 skill files relevant to the task — don't load all 8 at once. The `SKILL.md` contains a Mermaid decision flowchart for choosing which skill file to use.
+`skills/` is designed to be used with Claude/AI to generate production-ready LINE API code. Each subdirectory is a standalone skill — load only 1–2 skills relevant to the task. The `line-api-skill` skill contains a Mermaid decision flowchart for choosing which skill to activate.
 
-To install as a Claude skill: copy `line-api-skill/` to `~/.claude/skills/`.
+**Install options:**
+```bash
+# Via npx (recommended)
+npx skills add <repo-url>
+
+# Manual — copy individual skill directories to ~/.claude/skills/
+cp -r skills/line-messaging ~/.claude/skills/
+```
+
+Skill files (`skills/`) are written in English. Keep new content in the language matching its directory.
 
 ## Tech Stack
 
@@ -61,4 +69,4 @@ To install as a Claude skill: copy `line-api-skill/` to `~/.claude/skills/`.
 
 ## Content Language
 
-Workshop files (`workshop/`) are written in Thai. Skill files (`line-api-skill/`) and official docs (`docs/`) are in English. Keep new content in the language matching its directory.
+Workshop files (`workshop/`) are written in Thai. Official docs (`docs/`) are in English. Keep new content in the language matching its directory.

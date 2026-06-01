@@ -3,14 +3,14 @@
 > **โดย Thepnatee Phojan — LINE API Expert**
 > คอร์ส workshop ภาษาไทยสำหรับนักพัฒนาที่อยากสร้างจริงบน LINE Platform — ตั้งแต่เปิด Official Account ครั้งแรก ไปจนถึง LINE MINI App และ Dev Tools Builder ของตัวเอง
 
-47 บทสอน เน้นเข้าใจ "ทำไม" ก่อน "ทำอะไร" — ทุกบทมีตัวอย่างใช้จริง, ภาพ Mermaid, ข้อผิดพลาดที่คนไทยมักเจอ และ Checklist ก่อนไปต่อ
+45 บทสอน เน้นเข้าใจ "ทำไม" ก่อน "ทำอะไร" — ทุกบทมีตัวอย่างใช้จริง, ภาพ Mermaid, ข้อผิดพลาดที่คนไทยมักเจอ และ Checklist ก่อนไปต่อ
 
 ---
 
 **แนะนำลำดับ**
 - **มือใหม่** — อ่านตามลำดับ Chapter 01 → 11
 - **ทำ Bot อยู่แล้ว อยากต่อยอด** — ข้ามไป Chapter 05 (advanced messaging) → 09 (LIFF)
-- **Reference จุดเดียว** — ใช้ [`line-api-skill/`](line-api-skill/) เป็น cookbook สำหรับให้ Claude/AI generate code ที่ production-ready
+- **Reference จุดเดียว** — ใช้ [`skills/`](skills/) เป็น cookbook สำหรับให้ Claude/AI generate code ที่ production-ready
 
 ---
 
@@ -18,10 +18,10 @@
 
 ```
 developer-tools-builder-document/
-├── workshop/         ← 47 บทสอน (.md) — เอกสารหลัก
-├── line-api-skill/   ← Cookbook ของขวัญนักเรียน — เอาไปใช้กับ Claude/AI ได้เลย
-├── docs/             ← Reference docs จาก LINE Developers (ทางการ)
-├── assets/           ← รูปภาพประกอบ
+├── workshop/   ← 45 บทสอน (.md) — เอกสารหลัก
+├── skills/     ← Cookbook ของขวัญนักเรียน — เอาไปใช้กับ Claude/AI ได้เลย
+├── docs/       ← Reference docs จาก LINE Developers (ทางการ)
+├── assets/     ← รูปภาพประกอบ
 ```
 
 ---
@@ -54,10 +54,9 @@ developer-tools-builder-document/
 | | บท | หัวข้อ |
 |---|---|--------|
 | 04-01 | [Create Chatbot ด้วย Firebase](workshop/04-01.create-chatbot-firebase.md) | Firebase Functions + LINE handshake |
-| 04-02 | [ngrok](workshop/04-02.ngrok.md) | สร้าง HTTPS tunnel สำหรับ dev |
-| 04-03 | [Setup Webhook](workshop/04-03.setup-webhook.md) | ผูก URL กับ LINE Console |
-| 04-04 | [Setup Webhook ผ่าน API](workshop/04-04.setup-webhook-by-api.md) | สำหรับ CI/CD pipeline |
-| 04-05 | [Webhook SSL/TLS](workshop/04-05.webhook-ssl-tls.md) | TLS 1.2/1.3 cert validation |
+| 04-02 | [Setup Webhook](workshop/04-02.setup-webhook.md) | ผูก URL กับ LINE Console |
+| 04-03 | [Setup Webhook ผ่าน API](workshop/04-03.setup-webhook-by-api.md) | สำหรับ CI/CD pipeline |
+| 04-04 | [Webhook SSL/TLS](workshop/04-04.webhook-ssl-tls.md) | TLS 1.2/1.3 cert validation |
 
 ### Chapter 05 — Messages & Advanced Features
 | | บท | หัวข้อ |
@@ -74,8 +73,7 @@ developer-tools-builder-document/
 | 05-10 | [Sending Message](workshop/05-10.sending-message.md) | Reply / Push / Multicast / Broadcast |
 | 05-11 | [Narrowcast](workshop/05-11.message-narrowcast.md) | ส่งเจาะกลุ่มแบบแม่นยำ |
 | 05-12 | [Message Statistics](workshop/05-12.get-statistics-of-sent-messages.md) | วัดผลทุกข้อความที่ส่งออก |
-| 05-13 | [Cron Job](workshop/05-13.cronjob.md) | ให้บอทส่งเองตามเวลา |
-| 05-14 | [LINE Beacon](workshop/05-14.line-beacon.md) | ส่งข้อความเมื่อผู้ใช้เดินผ่าน |
+| 05-13 | [LINE Beacon](workshop/05-13.line-beacon.md) | ส่งข้อความเมื่อผู้ใช้เดินผ่าน |
 
 ### Chapter 06 — Flex Messages
 | | บท | หัวข้อ |
@@ -125,19 +123,26 @@ developer-tools-builder-document/
 
 ## ใช้ AI ช่วย Generate Code
 
-[`line-api-skill/`](line-api-skill/) เป็น **Claude Skill / Cookbook** สำหรับให้ AI generate code LINE API ได้แบบ production-ready:
+[`skills/`](skills/) เป็น **Claude Skill / Cookbook** สำหรับให้ AI generate code LINE API ได้แบบ production-ready:
 
-| ไฟล์ | ใช้ทำอะไร |
-|------|----------|
-| [`SKILL.md`](line-api-skill/SKILL.md) | Index + Decision Guide เลือก sub-skill |
-| [`line-api-common.md`](line-api-skill/line-api-common.md) | Token rotation, 429 backoff, error handler patterns |
-| [`line-webhook.md`](line-api-skill/line-webhook.md) | Production webhook + Firestore idempotency + signature debug |
-| [`line-messaging.md`](line-api-skill/line-messaging.md) | Decision tree + multicast chunker + quota-aware sending |
-| [`line-flex-message.md`](line-api-skill/line-flex-message.md) | 6 recipes + modify-a-recipe playbook + debug checklist |
-| [`line-rich-menu.md`](line-api-skill/line-rich-menu.md) | Tab switching state machine + staged rollout + rollback |
-| [`line-liff.md`](line-api-skill/line-liff.md) | LIFF init pipeline + Firebase auth + 5 production recipes |
+| Skill | ใช้ทำอะไร |
+|-------|----------|
+| [`line-api-skill`](skills/line-api-skill/SKILL.md) | Index + Decision Guide เลือก sub-skill |
+| [`line-api-common`](skills/line-api-common/SKILL.md) | Token rotation, 429 backoff, error handler patterns |
+| [`line-webhook`](skills/line-webhook/SKILL.md) | Production webhook + Firestore idempotency + signature debug |
+| [`line-messaging`](skills/line-messaging/SKILL.md) | Decision tree + multicast chunker + quota-aware sending |
+| [`line-flex-message`](skills/line-flex-message/SKILL.md) | 6 recipes + modify-a-recipe playbook + debug checklist |
+| [`line-rich-menu`](skills/line-rich-menu/SKILL.md) | Tab switching state machine + staged rollout + rollback |
+| [`line-api-expert`](skills/line-api-expert/SKILL.md) | Expert Agent — วิเคราะห์ requirement, แนะนำ feature, ออกแบบ architecture |
 
-**วิธีใช้** copy โฟลเดอร์ `line-api-skill/` ไปไว้ที่ `~/.claude/skills/` แล้วใช้ Claude Code ในโปรเจ็กต์ — Claude จะรู้ pattern ครบ และ generate code ที่มี error handling เลย
+**วิธีใช้ (ตาม 9arm-skills standard):**
+```bash
+# Install ผ่าน npx (แนะนำ)
+npx skills add <repo-url>
+
+# หรือ copy ทีละ skill ไปที่ ~/.claude/skills/
+cp -r skills/line-messaging ~/.claude/skills/
+```
 
 ---
 
