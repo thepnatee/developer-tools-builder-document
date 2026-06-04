@@ -476,7 +476,7 @@ async function handleImageMessage(event: any): Promise<void> {
 
 1. **"signature doesn't match"** — You parsed JSON before verifying. Use raw body string only.
 2. **"processed twice"** — No deduplication. Store `webhookEventId` in Firestore.
-3. **"replyToken expired"** — More than 1 minute passed. Use async processing + Push message instead.
+3. **"replyToken expired"** — More than 20 minutes passed. Use async processing + Push message instead.
 4. **"timeout"** — Webhook handler took >2 seconds. Move to async task.
 5. **"404 Not Found"** — User not a friend, blocked you, or doesn't exist. Handle gracefully.
 

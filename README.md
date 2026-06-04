@@ -74,6 +74,7 @@ developer-tools-builder-document/
 | 05-11 | [Narrowcast](workshop/05-11.message-narrowcast.md) | ส่งเจาะกลุ่มแบบแม่นยำ |
 | 05-12 | [Message Statistics](workshop/05-12.get-statistics-of-sent-messages.md) | วัดผลทุกข้อความที่ส่งออก |
 | 05-13 | [LINE Beacon](workshop/05-13.line-beacon.md) | ส่งข้อความเมื่อผู้ใช้เดินผ่าน |
+| 05-14 | [API Error Codes](workshop/05-14.line-api-error-codes.md) | อ่าน error แล้วแก้ได้ทันที |
 
 ### Chapter 06 — Flex Messages
 | | บท | หัวข้อ |

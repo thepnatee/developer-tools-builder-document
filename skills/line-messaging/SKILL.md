@@ -21,7 +21,7 @@ description: LINE messaging methods (reply/push/multicast/broadcast/narrowcast),
 ```mermaid
 flowchart TD
     Start[Need to send a message?] --> Q1{User just messaged<br/>or took action?}
-    Q1 -->|Yes<br/>I have replyToken| Reply["<b>Reply</b><br/>✓ Free quota<br/>✓ Fast<br/>⚠ 1-minute window"]
+    Q1 -->|Yes<br/>I have replyToken| Reply["<b>Reply</b><br/>✓ Free quota<br/>✓ Fast<br/>⚠ 20-minute window"]
     Q1 -->|No| Q2{Send to how many users?}
     Q2 -->|1 user<br/>Anytime| Push["<b>Push</b><br/>2,000 req/sec<br/>Deduct quota"]
     Q2 -->|Few users<br/>list of IDs| Multi["<b>Multicast</b><br/>200 req/sec<br/>Max 500 IDs/call<br/>Deduct quota"]
@@ -55,7 +55,7 @@ POST https://api.line.me/v2/bot/message/reply
 
 **Key Points:**
 - ✅ **Zero quota cost** — never deduct from daily limit
-- ⚠️ Only works within **1 minute** of receiving the event
+- ⚠️ Only works within **20 minutes** of receiving the event
 - 🔐 `replyToken` — single-use, from webhook event
 - 📊 Rate limit: 2,000 req/sec per channel
 - 📝 Max 5 messages per call
