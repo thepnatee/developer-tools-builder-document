@@ -1,4 +1,4 @@
-# LINE Developer Tools Builder — Workshop คอร์สสร้าง LINE Bot และเว็บแอปจริง
+# LINE Developer Tools Builde
 
 > **โดย Thepnatee Phojan — LINE API Expert**
 > คอร์ส workshop ภาษาไทยสำหรับนักพัฒนาที่อยากสร้างจริงบน LINE Platform — ตั้งแต่เปิด Official Account ครั้งแรก ไปจนถึง LINE MINI App และ Dev Tools Builder ของตัวเอง
